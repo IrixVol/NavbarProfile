@@ -18,6 +18,7 @@ struct NavBarProfileWrapperView<Content: View, Background: View>: View {
     let model: NavBarProfileView.Model
     
     @State var navbarHeight: CGFloat = 0
+    @State var scrollPosition: ScrollPosition = .init(y: 0)
     @ObservedObject var profileBehaviour: NavBarProfileBehaviour
     
     init(
@@ -72,14 +73,31 @@ struct NavBarProfileWrapperView<Content: View, Background: View>: View {
         }
     }
 
-    @ViewBuilder
     private func observeOffset(_ content: Content) -> some View {
+        
         content
-            .introspectScrollView { scrollView in
-                if profileBehaviour.scrollView == scrollView { return }
-                profileBehaviour.scrollView = scrollView
-                profileBehaviour.setupScrollViewOffsetObserver(scrollView: scrollView)
-                profileBehaviour.scrollViewTopInset = -scrollView.adjustedContentInset.top
+            .onFrameChanged { rect in
+                profileBehaviour.scrollViewTopInset = -rect.minY
             }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { _, newValue in
+                /// Updating progress (and NavBarProfileView) when the scroll position is changed
+                profileBehaviour.updateScrollViewOffset(newValue)
+            }
+            .onScrollPhaseChange { _, newPhase, context in
+                
+                /// finish animation when scroll is stopped
+                if
+                    !newPhase.isScrolling,
+                    let offset = profileBehaviour.getFinalizeScrollPosition()
+                {
+                    withAnimation {
+                        scrollPosition.scrollTo(y: offset)
+                    }
+                }
+            }
+            /// finish animation when scroll is stopped
+            .scrollPosition($scrollPosition)
     }
 }
